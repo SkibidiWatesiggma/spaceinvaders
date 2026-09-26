@@ -1,9 +1,11 @@
 #include "raylib.h"
+#include <stdio.h>
 
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
-#define ROWS 4
-#define COLS 10
+#define MAX_LEVEL 50
+#define MAX_ALIENS 50
+#define MAX_BULLETS 30
 
 typedef struct {
     Vector2 pos;
@@ -16,36 +18,102 @@ typedef struct {
     float speed;
 } Bullet;
 
+static int LoadLevel(void)
+{
+    FILE *file = fopen("level.txt", "r");
+
+    if (!file)
+        return 1;
+
+    int completedLevel = 0;
+
+    if (fscanf(file, "%d", &completedLevel) != 1)
+        completedLevel = 0;
+
+    fclose(file);
+
+    if (completedLevel < 0)
+        completedLevel = 0;
+
+    if (completedLevel >= MAX_LEVEL)
+        return MAX_LEVEL;
+
+    return completedLevel + 1;
+}
+
+static void SaveLevel(int level)
+{
+    FILE *file = fopen("level.txt", "w");
+
+    if (!file)
+        return;
+
+    fprintf(file, "%d\n", level);
+
+    fclose(file);
+}
+
+static void SetupLevel(
+    Alien aliens[],
+    int alienCount,
+    float *alienSpeed,
+    float *alienDirection
+)
+{
+    for (int i = 0; i < MAX_ALIENS; i++)
+        aliens[i].active = false;
+
+    int cols = 10;
+
+    for (int i = 0; i < alienCount; i++)
+    {
+        int row = i / cols;
+        int col = i % cols;
+
+        aliens[i].pos = (Vector2){
+            100.0f + col * 60.0f,
+            80.0f + row * 45.0f
+        };
+
+        aliens[i].active = true;
+    }
+
+    *alienDirection = 1.0f;
+    *alienSpeed = 30.0f + (alienCount - 1) * 0.4f;
+
+    if (*alienSpeed > 50.0f)
+        *alienSpeed = 50.0f;
+}
+
 int main(void)
 {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Space Invaders");
     SetTargetFPS(0);
 
+    int level = LoadLevel();
+    int lives = 3;
+
     Vector2 player = {
-        SCREEN_WIDTH / 2.0f - 20,
-        SCREEN_HEIGHT - 50
+        SCREEN_WIDTH / 2.0f - 20.0f,
+        SCREEN_HEIGHT - 50.0f
     };
 
     const float playerSpeed = 300.0f;
+    const float alienDrop = 8.0f;
 
-    Alien aliens[ROWS][COLS];
-
-    for (int row = 0; row < ROWS; row++)
-    {
-        for (int col = 0; col < COLS; col++)
-        {
-            aliens[row][col].pos = (Vector2){
-                100.0f + col * 60.0f,
-                80.0f + row * 45.0f
-            };
-
-            aliens[row][col].active = true;
-        }
-    }
+    Alien aliens[MAX_ALIENS];
 
     float alienDirection = 1.0f;
-    float alienSpeed = 35.0f;
-    float alienDrop = 20.0f;
+    float alienSpeed = 30.0f;
+
+    int alienCount = level;
+
+    SetupLevel(
+        aliens,
+        alienCount,
+        &alienSpeed,
+        &alienDirection
+    );
 
     Bullet playerBullet = {
         .pos = {0, 0},
@@ -53,9 +121,12 @@ int main(void)
         .speed = 420.0f
     };
 
-    Bullet enemyBullets[20] = {0};
+    Bullet enemyBullets[MAX_BULLETS] = {0};
 
     float shootTimer = 0.0f;
+
+    bool gameOver = false;
+    bool gameWon = false;
 
     while (!WindowShouldClose())
     {
@@ -64,47 +135,47 @@ int main(void)
         if (dt > 0.1f)
             dt = 0.1f;
 
-        if (IsKeyDown(KEY_A))
-            player.x -= playerSpeed * dt;
-
-        if (IsKeyDown(KEY_D))
-            player.x += playerSpeed * dt;
-
-        if (player.x < 0)
-            player.x = 0;
-
-        if (player.x > SCREEN_WIDTH - 40)
-            player.x = SCREEN_WIDTH - 40;
-
-        if (IsKeyPressed(KEY_SPACE) && !playerBullet.active)
+        if (!gameOver && !gameWon)
         {
-            playerBullet.pos = (Vector2){
-                player.x + 18,
-                player.y - 8
-            };
+            if (IsKeyDown(KEY_A))
+                player.x -= playerSpeed * dt;
 
-            playerBullet.active = true;
-        }
+            if (IsKeyDown(KEY_D))
+                player.x += playerSpeed * dt;
 
-        if (playerBullet.active)
-        {
-            playerBullet.pos.y -= playerBullet.speed * dt;
+            if (player.x < 0)
+                player.x = 0;
 
-            if (playerBullet.pos.y < -20)
-                playerBullet.active = false;
-        }
+            if (player.x > SCREEN_WIDTH - 40)
+                player.x = SCREEN_WIDTH - 40;
 
-        bool hitEdge = false;
-
-        for (int row = 0; row < ROWS; row++)
-        {
-            for (int col = 0; col < COLS; col++)
+            if (IsKeyPressed(KEY_SPACE) && !playerBullet.active)
             {
-                if (!aliens[row][col].active)
+                playerBullet.pos = (Vector2){
+                    player.x + 18,
+                    player.y - 8
+                };
+
+                playerBullet.active = true;
+            }
+
+            if (playerBullet.active)
+            {
+                playerBullet.pos.y -= playerBullet.speed * dt;
+
+                if (playerBullet.pos.y < -20)
+                    playerBullet.active = false;
+            }
+
+            bool hitEdge = false;
+
+            for (int i = 0; i < alienCount; i++)
+            {
+                if (!aliens[i].active)
                     continue;
 
                 float nextX =
-                    aliens[row][col].pos.x +
+                    aliens[i].pos.x +
                     alienDirection * alienSpeed * dt;
 
                 if (nextX < 20.0f ||
@@ -116,185 +187,300 @@ int main(void)
             }
 
             if (hitEdge)
-                break;
-        }
-
-        if (hitEdge)
-        {
-            alienDirection *= -1.0f;
-
-            for (int row = 0; row < ROWS; row++)
             {
-                for (int col = 0; col < COLS; col++)
+                alienDirection *= -1.0f;
+
+                for (int i = 0; i < alienCount; i++)
                 {
-                    if (aliens[row][col].active)
-                    {
-                        aliens[row][col].pos.y += alienDrop;
-                    }
+                    if (aliens[i].active)
+                        aliens[i].pos.y += alienDrop;
                 }
             }
-        }
-        else
-        {
-            for (int row = 0; row < ROWS; row++)
+            else
             {
-                for (int col = 0; col < COLS; col++)
+                for (int i = 0; i < alienCount; i++)
                 {
-                    if (aliens[row][col].active)
+                    if (aliens[i].active)
                     {
-                        aliens[row][col].pos.x +=
+                        aliens[i].pos.x +=
                             alienDirection * alienSpeed * dt;
                     }
                 }
             }
-        }
 
-        if (playerBullet.active)
-        {
-            Rectangle bulletRect = {
-                playerBullet.pos.x - 2,
-                playerBullet.pos.y - 6,
-                4,
-                12
-            };
-
-            for (int row = 0; row < ROWS; row++)
+            if (playerBullet.active)
             {
-                for (int col = 0; col < COLS; col++)
+                Rectangle bulletRect = {
+                    playerBullet.pos.x - 2,
+                    playerBullet.pos.y - 6,
+                    4,
+                    12
+                };
+
+                for (int i = 0; i < alienCount; i++)
                 {
-                    if (!aliens[row][col].active)
+                    if (!aliens[i].active)
                         continue;
 
                     Rectangle alienRect = {
-                        aliens[row][col].pos.x,
-                        aliens[row][col].pos.y,
+                        aliens[i].pos.x,
+                        aliens[i].pos.y,
                         30,
                         25
                     };
 
                     if (CheckCollisionRecs(alienRect, bulletRect))
                     {
-                        aliens[row][col].active = false;
+                        aliens[i].active = false;
                         playerBullet.active = false;
-
-                        alienSpeed += 2.0f;
-
                         break;
                     }
                 }
-
-                if (!playerBullet.active)
-                    break;
             }
-        }
 
-        shootTimer += dt;
+            shootTimer += dt;
 
-        if (shootTimer >= 0.8f)
-        {
-            shootTimer = 0.0f;
+            float shootInterval =
+                1.2f - (level - 1) * 0.003f;
 
-            for (int attempts = 0; attempts < 20; attempts++)
+            if (shootInterval < 1.0f)
+                shootInterval = 1.0f;
+
+            if (shootTimer >= shootInterval)
             {
-                int row = GetRandomValue(0, ROWS - 1);
-                int col = GetRandomValue(0, COLS - 1);
+                shootTimer = 0.0f;
 
-                if (!aliens[row][col].active)
+                for (int attempts = 0; attempts < 30; attempts++)
+                {
+                    int index =
+                        GetRandomValue(0, alienCount - 1);
+
+                    if (!aliens[index].active)
+                        continue;
+
+                    for (int i = 0; i < MAX_BULLETS; i++)
+                    {
+                        if (!enemyBullets[i].active)
+                        {
+                            enemyBullets[i].active = true;
+                            enemyBullets[i].speed = 180.0f;
+
+                            enemyBullets[i].pos = (Vector2){
+                                aliens[index].pos.x + 15,
+                                aliens[index].pos.y + 25
+                            };
+
+                            break;
+                        }
+                    }
+
+                    break;
+                }
+            }
+
+            for (int i = 0; i < MAX_BULLETS; i++)
+            {
+                if (!enemyBullets[i].active)
                     continue;
 
-                for (int i = 0; i < 20; i++)
+                enemyBullets[i].pos.y +=
+                    enemyBullets[i].speed * dt;
+
+                Rectangle enemyBulletRect = {
+                    enemyBullets[i].pos.x - 2,
+                    enemyBullets[i].pos.y,
+                    4,
+                    10
+                };
+
+                Rectangle playerRect = {
+                    player.x,
+                    player.y - 10,
+                    40,
+                    20
+                };
+
+                if (CheckCollisionRecs(
+                        enemyBulletRect,
+                        playerRect))
                 {
-                    if (!enemyBullets[i].active)
+                    enemyBullets[i].active = false;
+
+                    lives--;
+
+                    if (lives <= 0)
                     {
-                        enemyBullets[i].active = true;
-                        enemyBullets[i].speed = 240.0f;
-
-                        enemyBullets[i].pos = (Vector2){
-                            aliens[row][col].pos.x + 15,
-                            aliens[row][col].pos.y + 25
-                        };
-
-                        break;
+                        lives = 0;
+                        gameOver = true;
                     }
+
+                    break;
                 }
 
-                break;
+                if (enemyBullets[i].pos.y > SCREEN_HEIGHT)
+                    enemyBullets[i].active = false;
+            }
+
+            bool aliensLeft = false;
+
+            for (int i = 0; i < alienCount; i++)
+            {
+                if (aliens[i].active)
+                {
+                    aliensLeft = true;
+                    break;
+                }
+            }
+
+            if (!aliensLeft)
+            {
+                SaveLevel(level);
+
+                if (level >= MAX_LEVEL)
+                {
+                    gameWon = true;
+                }
+                else
+                {
+                    level++;
+                    alienCount = level;
+
+                    SetupLevel(
+                        aliens,
+                        alienCount,
+                        &alienSpeed,
+                        &alienDirection
+                    );
+
+                    playerBullet.active = false;
+
+                    for (int i = 0; i < MAX_BULLETS; i++)
+                        enemyBullets[i].active = false;
+
+                    shootTimer = 0.0f;
+                }
+            }
+
+            for (int i = 0; i < alienCount; i++)
+            {
+                if (!aliens[i].active)
+                    continue;
+
+                Rectangle alienRect = {
+                    aliens[i].pos.x,
+                    aliens[i].pos.y,
+                    30,
+                    25
+                };
+
+                Rectangle playerRect = {
+                    player.x,
+                    player.y - 10,
+                    40,
+                    20
+                };
+
+                if (CheckCollisionRecs(alienRect, playerRect) ||
+                    aliens[i].pos.y + 25 >= player.y)
+                {
+                    lives = 0;
+                    gameOver = true;
+                    break;
+                }
             }
         }
-
-        for (int i = 0; i < 20; i++)
+        else
         {
-            if (!enemyBullets[i].active)
-                continue;
+            if (IsKeyPressed(KEY_ENTER))
+            {
+                if (gameWon)
+                {
+                    level = 1;
+                    SaveLevel(0);
+                }
 
-            enemyBullets[i].pos.y +=
-                enemyBullets[i].speed * dt;
+                lives = 3;
+                gameOver = false;
+                gameWon = false;
 
-            if (enemyBullets[i].pos.y > SCREEN_HEIGHT)
-                enemyBullets[i].active = false;
+                player.x = SCREEN_WIDTH / 2.0f - 20.0f;
+
+                alienCount = level;
+
+                SetupLevel(
+                    aliens,
+                    alienCount,
+                    &alienSpeed,
+                    &alienDirection
+                );
+
+                playerBullet.active = false;
+
+                for (int i = 0; i < MAX_BULLETS; i++)
+                    enemyBullets[i].active = false;
+
+                shootTimer = 0.0f;
+            }
         }
 
         BeginDrawing();
 
         ClearBackground(BLACK);
 
-        for (int row = 0; row < ROWS; row++)
+        for (int i = 0; i < alienCount; i++)
         {
-            for (int col = 0; col < COLS; col++)
-            {
-                if (!aliens[row][col].active)
-                    continue;
+            if (!aliens[i].active)
+                continue;
 
-                Vector2 p = aliens[row][col].pos;
+            Vector2 p = aliens[i].pos;
 
-                DrawRectangle(
-                    (int)p.x + 5,
-                    (int)p.y,
-                    20,
-                    5,
-                    GREEN
-                );
+            DrawRectangle(
+                (int)p.x + 5,
+                (int)p.y,
+                20,
+                5,
+                GREEN
+            );
 
-                DrawRectangle(
-                    (int)p.x,
-                    (int)p.y + 5,
-                    30,
-                    15,
-                    GREEN
-                );
+            DrawRectangle(
+                (int)p.x,
+                (int)p.y + 5,
+                30,
+                15,
+                GREEN
+            );
 
-                DrawRectangle(
-                    (int)p.x + 5,
-                    (int)p.y + 20,
-                    5,
-                    5,
-                    GREEN
-                );
+            DrawRectangle(
+                (int)p.x + 5,
+                (int)p.y + 20,
+                5,
+                5,
+                GREEN
+            );
 
-                DrawRectangle(
-                    (int)p.x + 20,
-                    (int)p.y + 20,
-                    5,
-                    5,
-                    GREEN
-                );
+            DrawRectangle(
+                (int)p.x + 20,
+                (int)p.y + 20,
+                5,
+                5,
+                GREEN
+            );
 
-                DrawRectangle(
-                    (int)p.x + 7,
-                    (int)p.y + 7,
-                    4,
-                    4,
-                    BLACK
-                );
+            DrawRectangle(
+                (int)p.x + 7,
+                (int)p.y + 7,
+                4,
+                4,
+                BLACK
+            );
 
-                DrawRectangle(
-                    (int)p.x + 19,
-                    (int)p.y + 7,
-                    4,
-                    4,
-                    BLACK
-                );
-            }
+            DrawRectangle(
+                (int)p.x + 19,
+                (int)p.y + 7,
+                4,
+                4,
+                BLACK
+            );
         }
 
         DrawRectangle(
@@ -324,7 +510,7 @@ int main(void)
             );
         }
 
-        for (int i = 0; i < 20; i++)
+        for (int i = 0; i < MAX_BULLETS; i++)
         {
             if (!enemyBullets[i].active)
                 continue;
@@ -345,6 +531,60 @@ int main(void)
             20,
             GREEN
         );
+
+        DrawText(
+            TextFormat("LEVEL: %d", level),
+            10,
+            35,
+            20,
+            GREEN
+        );
+
+        DrawText(
+            TextFormat("LIVES: %d", lives),
+            SCREEN_WIDTH - 120,
+            10,
+            20,
+            GREEN
+        );
+
+        if (gameOver)
+        {
+            DrawText(
+                "GAME OVER",
+                SCREEN_WIDTH / 2 - 110,
+                SCREEN_HEIGHT / 2 - 40,
+                40,
+                GREEN
+            );
+
+            DrawText(
+                "PRESS ENTER TO RESTART",
+                SCREEN_WIDTH / 2 - 150,
+                SCREEN_HEIGHT / 2 + 20,
+                20,
+                WHITE
+            );
+        }
+
+        if (gameWon)
+        {
+            DrawText(
+                "YOU WIN!",
+                SCREEN_WIDTH / 2 - 80,
+                SCREEN_HEIGHT / 2 - 40,
+                40,
+                GREEN
+            );
+
+            DrawText(
+                "PRESS ENTER TO PLAY AGAIN",
+                SCREEN_WIDTH / 2 - 155,
+                SCREEN_HEIGHT / 2 + 20,
+                20,
+                WHITE
+            );
+        }
 
         EndDrawing();
     }
