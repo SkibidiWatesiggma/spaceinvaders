@@ -19,7 +19,7 @@ typedef struct {
 int main(void)
 {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Space Invaders");
-    SetTargetFPS(60);
+    SetTargetFPS(0);
 
     Vector2 player = {
         SCREEN_WIDTH / 2.0f - 20,
