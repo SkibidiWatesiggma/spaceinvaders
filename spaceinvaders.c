@@ -30,12 +30,15 @@ int main(void)
 
     Alien aliens[ROWS][COLS];
 
-    for (int row = 0; row < ROWS; row++) {
-        for (int col = 0; col < COLS; col++) {
+    for (int row = 0; row < ROWS; row++)
+    {
+        for (int col = 0; col < COLS; col++)
+        {
             aliens[row][col].pos = (Vector2){
-                100 + col * 60,
-                80 + row * 45
+                100.0f + col * 60.0f,
+                80.0f + row * 45.0f
             };
+
             aliens[row][col].active = true;
         }
     }
@@ -57,6 +60,9 @@ int main(void)
     while (!WindowShouldClose())
     {
         float dt = GetFrameTime();
+
+        if (dt > 0.1f)
+            dt = 0.1f;
 
         if (IsKeyDown(KEY_A))
             player.x -= playerSpeed * dt;
@@ -84,7 +90,7 @@ int main(void)
         {
             playerBullet.pos.y -= playerBullet.speed * dt;
 
-            if (playerBullet.pos.y < 0)
+            if (playerBullet.pos.y < -20)
                 playerBullet.active = false;
         }
 
@@ -97,33 +103,61 @@ int main(void)
                 if (!aliens[row][col].active)
                     continue;
 
-                aliens[row][col].pos.x +=
+                float nextX =
+                    aliens[row][col].pos.x +
                     alienDirection * alienSpeed * dt;
 
-                if (aliens[row][col].pos.x < 20 ||
-                    aliens[row][col].pos.x > SCREEN_WIDTH - 40)
+                if (nextX < 20.0f ||
+                    nextX + 30.0f > SCREEN_WIDTH - 20.0f)
                 {
                     hitEdge = true;
+                    break;
                 }
             }
+
+            if (hitEdge)
+                break;
         }
 
         if (hitEdge)
         {
-            alienDirection *= -1;
+            alienDirection *= -1.0f;
 
             for (int row = 0; row < ROWS; row++)
             {
                 for (int col = 0; col < COLS; col++)
                 {
                     if (aliens[row][col].active)
+                    {
                         aliens[row][col].pos.y += alienDrop;
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (int row = 0; row < ROWS; row++)
+            {
+                for (int col = 0; col < COLS; col++)
+                {
+                    if (aliens[row][col].active)
+                    {
+                        aliens[row][col].pos.x +=
+                            alienDirection * alienSpeed * dt;
+                    }
                 }
             }
         }
 
         if (playerBullet.active)
         {
+            Rectangle bulletRect = {
+                playerBullet.pos.x - 2,
+                playerBullet.pos.y - 6,
+                4,
+                12
+            };
+
             for (int row = 0; row < ROWS; row++)
             {
                 for (int col = 0; col < COLS; col++)
@@ -138,55 +172,53 @@ int main(void)
                         25
                     };
 
-                    Rectangle bulletRect = {
-                        playerBullet.pos.x - 2,
-                        playerBullet.pos.y - 6,
-                        4,
-                        12
-                    };
-
                     if (CheckCollisionRecs(alienRect, bulletRect))
                     {
                         aliens[row][col].active = false;
                         playerBullet.active = false;
+
                         alienSpeed += 2.0f;
+
                         break;
                     }
                 }
+
+                if (!playerBullet.active)
+                    break;
             }
         }
 
         shootTimer += dt;
 
-        if (shootTimer > 0.8f)
+        if (shootTimer >= 0.8f)
         {
-            shootTimer = 0;
+            shootTimer = 0.0f;
 
             for (int attempts = 0; attempts < 20; attempts++)
             {
                 int row = GetRandomValue(0, ROWS - 1);
                 int col = GetRandomValue(0, COLS - 1);
 
-                if (aliens[row][col].active)
+                if (!aliens[row][col].active)
+                    continue;
+
+                for (int i = 0; i < 20; i++)
                 {
-                    for (int i = 0; i < 20; i++)
+                    if (!enemyBullets[i].active)
                     {
-                        if (!enemyBullets[i].active)
-                        {
-                            enemyBullets[i].active = true;
-                            enemyBullets[i].speed = 240.0f;
+                        enemyBullets[i].active = true;
+                        enemyBullets[i].speed = 240.0f;
 
-                            enemyBullets[i].pos = (Vector2){
-                                aliens[row][col].pos.x + 15,
-                                aliens[row][col].pos.y + 25
-                            };
+                        enemyBullets[i].pos = (Vector2){
+                            aliens[row][col].pos.x + 15,
+                            aliens[row][col].pos.y + 25
+                        };
 
-                            break;
-                        }
+                        break;
                     }
-
-                    break;
                 }
+
+                break;
             }
         }
 
@@ -195,7 +227,8 @@ int main(void)
             if (!enemyBullets[i].active)
                 continue;
 
-            enemyBullets[i].pos.y += enemyBullets[i].speed * dt;
+            enemyBullets[i].pos.y +=
+                enemyBullets[i].speed * dt;
 
             if (enemyBullets[i].pos.y > SCREEN_HEIGHT)
                 enemyBullets[i].active = false;
@@ -214,13 +247,53 @@ int main(void)
 
                 Vector2 p = aliens[row][col].pos;
 
-                DrawRectangle((int)p.x + 5, (int)p.y, 20, 5, GREEN);
-                DrawRectangle((int)p.x, (int)p.y + 5, 30, 15, GREEN);
-                DrawRectangle((int)p.x + 5, (int)p.y + 20, 5, 5, GREEN);
-                DrawRectangle((int)p.x + 20, (int)p.y + 20, 5, 5, GREEN);
+                DrawRectangle(
+                    (int)p.x + 5,
+                    (int)p.y,
+                    20,
+                    5,
+                    GREEN
+                );
 
-                DrawRectangle((int)p.x + 7, (int)p.y + 7, 4, 4, BLACK);
-                DrawRectangle((int)p.x + 19, (int)p.y + 7, 4, 4, BLACK);
+                DrawRectangle(
+                    (int)p.x,
+                    (int)p.y + 5,
+                    30,
+                    15,
+                    GREEN
+                );
+
+                DrawRectangle(
+                    (int)p.x + 5,
+                    (int)p.y + 20,
+                    5,
+                    5,
+                    GREEN
+                );
+
+                DrawRectangle(
+                    (int)p.x + 20,
+                    (int)p.y + 20,
+                    5,
+                    5,
+                    GREEN
+                );
+
+                DrawRectangle(
+                    (int)p.x + 7,
+                    (int)p.y + 7,
+                    4,
+                    4,
+                    BLACK
+                );
+
+                DrawRectangle(
+                    (int)p.x + 19,
+                    (int)p.y + 7,
+                    4,
+                    4,
+                    BLACK
+                );
             }
         }
 
@@ -253,19 +326,25 @@ int main(void)
 
         for (int i = 0; i < 20; i++)
         {
-            if (enemyBullets[i].active)
-            {
-                DrawRectangle(
-                    (int)enemyBullets[i].pos.x - 2,
-                    (int)enemyBullets[i].pos.y,
-                    4,
-                    10,
-                    WHITE
-                );
-            }
+            if (!enemyBullets[i].active)
+                continue;
+
+            DrawRectangle(
+                (int)enemyBullets[i].pos.x - 2,
+                (int)enemyBullets[i].pos.y,
+                4,
+                10,
+                WHITE
+            );
         }
 
-        DrawText(TextFormat("FPS: %d", GetFPS()), 10, 10, 20, GREEN);
+        DrawText(
+            TextFormat("FPS: %d", GetFPS()),
+            10,
+            10,
+            20,
+            GREEN
+        );
 
         EndDrawing();
     }
