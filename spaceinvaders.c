@@ -26,7 +26,7 @@ int main(void)
         SCREEN_HEIGHT - 50
     };
 
-    const float playerSpeed = 5.0f;
+    const float playerSpeed = 300.0f;
 
     Alien aliens[ROWS][COLS];
 
@@ -47,7 +47,7 @@ int main(void)
     Bullet playerBullet = {
         .pos = {0, 0},
         .active = false,
-        .speed = 7.0f
+        .speed = 420.0f
     };
 
     Bullet enemyBullets[20] = {0};
@@ -56,11 +56,13 @@ int main(void)
 
     while (!WindowShouldClose())
     {
+        float dt = GetFrameTime();
+
         if (IsKeyDown(KEY_A))
-            player.x -= playerSpeed;
+            player.x -= playerSpeed * dt;
 
         if (IsKeyDown(KEY_D))
-            player.x += playerSpeed;
+            player.x += playerSpeed * dt;
 
         if (player.x < 0)
             player.x = 0;
@@ -80,7 +82,7 @@ int main(void)
 
         if (playerBullet.active)
         {
-            playerBullet.pos.y -= playerBullet.speed;
+            playerBullet.pos.y -= playerBullet.speed * dt;
 
             if (playerBullet.pos.y < 0)
                 playerBullet.active = false;
@@ -96,7 +98,7 @@ int main(void)
                     continue;
 
                 aliens[row][col].pos.x +=
-                    alienDirection * alienSpeed * GetFrameTime();
+                    alienDirection * alienSpeed * dt;
 
                 if (aliens[row][col].pos.x < 20 ||
                     aliens[row][col].pos.x > SCREEN_WIDTH - 40)
@@ -154,7 +156,7 @@ int main(void)
             }
         }
 
-        shootTimer += GetFrameTime();
+        shootTimer += dt;
 
         if (shootTimer > 0.8f)
         {
@@ -172,7 +174,7 @@ int main(void)
                         if (!enemyBullets[i].active)
                         {
                             enemyBullets[i].active = true;
-                            enemyBullets[i].speed = 4.0f;
+                            enemyBullets[i].speed = 240.0f;
 
                             enemyBullets[i].pos = (Vector2){
                                 aliens[row][col].pos.x + 15,
@@ -193,7 +195,7 @@ int main(void)
             if (!enemyBullets[i].active)
                 continue;
 
-            enemyBullets[i].pos.y += enemyBullets[i].speed;
+            enemyBullets[i].pos.y += enemyBullets[i].speed * dt;
 
             if (enemyBullets[i].pos.y > SCREEN_HEIGHT)
                 enemyBullets[i].active = false;
@@ -272,4 +274,3 @@ int main(void)
 
     return 0;
 }
-
